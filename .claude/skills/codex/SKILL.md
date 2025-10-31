@@ -13,40 +13,56 @@ description: Executes OpenAI Codex CLI for code analysis, refactoring, and autom
 
 **For every Codex task, follow this sequence**:
 
-1. ☐ **Ask user for execution parameters** via `AskUserQuestion` (single prompt):
+1. ☐ **Detect HPC/Slurm environment**:
+   - Check if running on HPC cluster (look for `/home/woody/`, `/home/hpc/`, Slurm env vars)
+   - If HPC detected: **Always use `--yolo` flag to bypass Landlock sandbox restrictions**
+
+2. ☐ **Ask user for execution parameters** via `AskUserQuestion` (single prompt):
    - Model: `gpt-5`, `gpt-5-codex`, or default
    - Reasoning effort: `minimal`, `low`, `medium`, `high`
 
-2. ☐ **Determine sandbox mode** based on task:
+3. ☐ **Determine sandbox mode** based on task:
    - `read-only`: Code review, analysis, documentation
    - `workspace-write`: Code modifications, file creation
    - `danger-full-access`: System operations, network access
+   - **HPC override**: Always add `--yolo` flag (bypasses Landlock restrictions)
 
-3. ☐ **Build command** with required flags:
+4. ☐ **Build command** with required flags:
    ```bash
    codex exec [OPTIONS] "PROMPT"
    ```
    Essential flags:
    - `-m <MODEL>` (if overriding default)
    - `-c model_reasoning_effort="<LEVEL>"`
-   - `-s <SANDBOX_MODE>`
+   - `-s <SANDBOX_MODE>` (skip on HPC)
    - `--skip-git-repo-check` (if outside git repo)
    - `-C <DIRECTORY>` (if changing workspace)
-   - `--full-auto` (for non-interactive execution)
+   - `--full-auto` (for non-interactive execution, **cannot be used with --yolo**)
 
-4. ☐ **Execute with stderr suppression**:
+   **HPC command pattern** (with `--yolo` to bypass Landlock):
+   ```bash
+   codex exec --yolo -m gpt-5 -c model_reasoning_effort="high" --skip-git-repo-check \
+     "Analyze this code: $(cat /path/to/file.py)" 2>/dev/null
+   ```
+
+   **Note**: `--yolo` is an alias for `--dangerously-bypass-approvals-and-sandbox` and is REQUIRED on HPC clusters to avoid Landlock sandbox errors. **Do not use --full-auto with --yolo as they are incompatible.**
+
+5. ☐ **Execute with stderr suppression**:
    - Append `2>/dev/null` to hide thinking tokens
    - Remove only if user requests verbose output or debugging
 
-5. ☐ **Validate execution**:
+6. ☐ **Validate execution**:
    - Check exit code (0 = success)
    - Summarize output for user
    - Report errors with actionable solutions
+   - If Landlock/sandbox errors on HPC: verify `--yolo` flag was used, retry if missing
 
-6. ☐ **Inform about resume capability**:
+7. ☐ **Inform about resume capability**:
    - "Resume this session anytime: `codex resume`"
 
 ## Command Patterns
+
+> **🔥 HPC QUICK TIP**: On HPC clusters (e.g., `/home/woody/`, `/home/hpc/`), **ALWAYS add `--yolo` flag** to avoid Landlock sandbox errors. Example: `codex exec --yolo -m gpt-5 ...`
 
 ### Read-Only Analysis
 ```bash
@@ -59,6 +75,36 @@ codex exec -m gpt-5 -c model_reasoning_effort="medium" -s read-only \
 cat file.py | codex exec -m gpt-5 -c model_reasoning_effort="low" \
   --skip-git-repo-check --full-auto - 2>/dev/null
 ```
+**Note**: Stdin with `-` flag may not be supported in all Codex CLI versions.
+
+### HPC/Slurm Environment (YOLO Mode - Bypass Landlock)
+When running on HPC clusters with Landlock security restrictions, use the `--yolo` flag:
+
+```bash
+# Primary solution: --yolo flag bypasses Landlock sandbox
+codex exec --yolo -m gpt-5 -c model_reasoning_effort="high" --skip-git-repo-check \
+  "Analyze this code: $(cat /path/to/file.py)" 2>/dev/null
+```
+
+**Alternative: Manual Code Injection** (if --yolo is unavailable):
+```bash
+# Capture code content and pass directly in prompt
+codex exec -m gpt-5 -c model_reasoning_effort="high" --skip-git-repo-check --full-auto \
+  "Analyze this Python code: $(cat file.py)" 2>/dev/null
+```
+Or for large files, use heredoc:
+```bash
+codex exec --yolo -m gpt-5 -c model_reasoning_effort="high" --skip-git-repo-check "$(cat <<'ENDCODE'
+Analyze the following code comprehensively:
+
+$(cat file.py)
+
+Focus on: architecture, algorithms, multi-GPU optimization, potential bugs, code quality.
+ENDCODE
+)" 2>/dev/null
+```
+
+**Note**: `--yolo` is short for `--dangerously-bypass-approvals-and-sandbox` and is safe on HPC login nodes where you have limited permissions anyway. **Do not combine --yolo with --full-auto as they are incompatible.**
 
 ### Code Modification
 ```bash
@@ -92,9 +138,10 @@ codex exec --profile production -c model_reasoning_effort="high" \
 | `-m, --model` | `gpt-5`, `gpt-5-codex` | Override default model |
 | `-c, --config` | `key=value` | Runtime config override (repeatable) |
 | `-s, --sandbox` | `read-only`, `workspace-write`, `danger-full-access` | Set execution permissions |
+| `--yolo` | flag | **REQUIRED on HPC** - Bypasses all sandbox restrictions (alias for `--dangerously-bypass-approvals-and-sandbox`). **Cannot be used with --full-auto** |
 | `-C, --cd` | `path` | Change workspace directory |
 | `--skip-git-repo-check` | flag | Allow execution outside git repos |
-| `--full-auto` | flag | Non-interactive mode (workspace-write + approvals on failure) |
+| `--full-auto` | flag | Non-interactive mode (workspace-write + approvals on failure). **Cannot be used with --yolo** |
 | `-p, --profile` | `string` | Load configuration profile from config.toml |
 | `--json` | flag | JSON event output (CI/CD pipelines) |
 | `-o, --output-last-message` | `path` | Write final message to file |
@@ -194,7 +241,9 @@ codex exec -c model_reasoning_effort="high" resume --last
 Before using high-impact flags, request user approval via `AskUserQuestion`:
 - `--full-auto`: Automated execution
 - `-s danger-full-access`: System-wide access
-- `--dangerously-bypass-approvals-and-sandbox`: All safeguards disabled (isolated environments only)
+- `--yolo` / `--dangerously-bypass-approvals-and-sandbox`:
+  - **HPC clusters**: No approval needed (required for operation)
+  - **Personal machines**: Request approval (full system access)
 
 ### Partial Success Handling
 When output contains warnings:
@@ -275,6 +324,61 @@ codex exec -C /target/dir -m gpt-5 --skip-git-repo-check \
 3. Try `--last` flag instead of specific ID
 4. Check if session expired or was cleaned up
 
+### HPC/Slurm Sandbox Failures
+
+**Symptom**: "Landlock sandbox error", "LandlockRestrict", or all file operations fail
+
+**Root Cause**: HPC clusters use Landlock/seccomp kernel security modules that block Codex's default sandbox
+
+**✅ SOLUTION: Use the `--yolo` flag** (priority order):
+
+1. **YOLO Flag** (PRIMARY SOLUTION - WORKS ON HPC):
+   ```bash
+   # Bypasses Landlock restrictions completely
+   codex exec --yolo -m gpt-5 -c model_reasoning_effort="high" --skip-git-repo-check \
+     "Analyze this code: $(cat /full/path/to/file.py)" 2>/dev/null
+   ```
+
+   **Why this works**: `--yolo` (alias for `--dangerously-bypass-approvals-and-sandbox`) disables the Codex sandbox entirely, allowing direct file access on HPC systems. **Note: Do not use --full-auto with --yolo as they are incompatible.**
+
+2. **Manual Code Injection** (fallback if --yolo unavailable):
+   ```bash
+   # Pass code directly in prompt via command substitution
+   codex exec -m gpt-5 -c model_reasoning_effort="high" --skip-git-repo-check --full-auto \
+     "Analyze this code comprehensively: $(cat /full/path/to/file.py)" 2>/dev/null
+   ```
+
+3. **Heredoc for Long Code**:
+   ```bash
+   codex exec --yolo -m gpt-5 -c model_reasoning_effort="high" --skip-git-repo-check "$(cat <<'EOF'
+   Analyze the following Python code for architecture, bugs, and optimization opportunities:
+
+   $(cat /home/user/script.py)
+
+   Provide technical depth with actionable insights.
+   EOF
+   )" 2>/dev/null
+   ```
+
+4. **Run on Login Node** (if compute node blocks outbound):
+   ```bash
+   # SSH to login node first, then run codex there (not in Slurm job)
+   ssh login.cluster.edu
+   codex exec --yolo -m gpt-5 --skip-git-repo-check "analyze @file.py" 2>/dev/null
+   ```
+
+5. **Use Apptainer/Singularity** (if cluster supports):
+   ```bash
+   # Build image with Codex installed, then run via Slurm
+   singularity exec codex.sif codex exec --yolo -m gpt-5 "task"
+   ```
+
+**Best Practice for HPC**:
+- **Always use `--yolo` flag on HPC clusters** - it's safe on login nodes where you already have limited permissions
+- Run analysis on login nodes, submit only heavy compute jobs to Slurm
+- Keep code files on shared filesystem readable from login nodes
+- Combine `--yolo` with `$(cat file.py)` for maximum compatibility
+
 ## Best Practices
 
 ### Reasoning Effort Selection
@@ -307,13 +411,19 @@ Create profiles for common workflows:
 
 ## Safety Guidelines
 
-**Never combine**:
-- `--full-auto` + `--dangerously-bypass-approvals-and-sandbox` (unless isolated VM)
+**HPC Clusters - `--yolo` is SAFE and REQUIRED**:
+- HPC login nodes already have strict permissions (no root access, no network modification)
+- `--yolo` bypasses Codex sandbox but you still operate within HPC user restrictions
+- Always use `--yolo` on HPC to avoid Landlock errors
+
+**General Use - Exercise Caution**:
+- Don't use `--yolo` on unrestricted systems (your laptop, cloud VMs with full sudo)
+- Prefer `--full-auto` + `-s workspace-write` for normal development
 
 **Always verify before**:
-- Using `danger-full-access` sandbox
-- Disabling approval prompts
-- Running with `--full-auto` on production code
+- Using `danger-full-access` sandbox (outside HPC)
+- Disabling approval prompts on production systems
+- Running with `--yolo` on personal machines with sudo access
 
 **Ask user approval for**:
 - First-time `workspace-write` usage
