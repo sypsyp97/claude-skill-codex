@@ -18,7 +18,7 @@ description: Executes OpenAI Codex CLI for code analysis, refactoring, and autom
    - If HPC detected: **Always use `--yolo` flag to bypass Landlock sandbox restrictions**
 
 2. ☐ **Ask user for execution parameters** via `AskUserQuestion` (single prompt):
-   - Model: `gpt-5`, `gpt-5-codex`, or default
+   - Model: `gpt-5`, `gpt-5-codex`,`gpt-5.1`, `gpt-5.1-codex` or default
    - Reasoning effort: `minimal`, `low`, `medium`, `high`
 
 3. ☐ **Determine sandbox mode** based on task:
@@ -62,7 +62,7 @@ description: Executes OpenAI Codex CLI for code analysis, refactoring, and autom
 
 ## Command Patterns
 
-> **🔥 HPC QUICK TIP**: On HPC clusters (e.g., `/home/woody/`, `/home/hpc/`), **ALWAYS add `--yolo` flag** to avoid Landlock sandbox errors. Example: `codex exec --yolo -m gpt-5 ...`
+> **🔥 HPC QUICK TIP**: On HPC clusters (e.g., `/home/woody/`, `/home/hpc/`), **ALWAYS add `--yolo` flag** to avoid Landlock sandbox errors. Example: `codex exec --yolo -m gpt-5.1 ...`
 
 ### Read-Only Analysis
 ```bash
@@ -72,7 +72,7 @@ codex exec -m gpt-5 -c model_reasoning_effort="medium" -s read-only \
 
 ### Stdin Input (bypasses sandbox file restrictions)
 ```bash
-cat file.py | codex exec -m gpt-5 -c model_reasoning_effort="low" \
+cat file.py | codex exec -m gpt-5.1 -c model_reasoning_effort="low" \
   --skip-git-repo-check --full-auto - 2>/dev/null
 ```
 **Note**: Stdin with `-` flag may not be supported in all Codex CLI versions.
@@ -89,12 +89,12 @@ codex exec --yolo -m gpt-5 -c model_reasoning_effort="high" --skip-git-repo-chec
 **Alternative: Manual Code Injection** (if --yolo is unavailable):
 ```bash
 # Capture code content and pass directly in prompt
-codex exec -m gpt-5 -c model_reasoning_effort="high" --skip-git-repo-check --full-auto \
+codex exec -m gpt-5.1 -c model_reasoning_effort="high" --skip-git-repo-check --full-auto \
   "Analyze this Python code: $(cat file.py)" 2>/dev/null
 ```
 Or for large files, use heredoc:
 ```bash
-codex exec --yolo -m gpt-5 -c model_reasoning_effort="high" --skip-git-repo-check "$(cat <<'ENDCODE'
+codex exec --yolo -m gpt-5.1 -c model_reasoning_effort="high" --skip-git-repo-check "$(cat <<'ENDCODE'
 Analyze the following code comprehensively:
 
 $(cat file.py)
@@ -108,7 +108,7 @@ ENDCODE
 
 ### Code Modification
 ```bash
-codex exec -m gpt-5 -c model_reasoning_effort="high" -s workspace-write \
+codex exec -m gpt-5.1 -c model_reasoning_effort="high" -s workspace-write \
   --skip-git-repo-check --full-auto "refactor @module.py to async/await" 2>/dev/null
 ```
 
@@ -119,7 +119,7 @@ echo "fix the remaining issues" | codex exec --skip-git-repo-check resume --last
 
 ### Cross-Directory Execution
 ```bash
-codex exec -C /path/to/project -m gpt-5 -c model_reasoning_effort="medium" \
+codex exec -C /path/to/project -m gpt-5.1 -c model_reasoning_effort="medium" \
   -s read-only --skip-git-repo-check --full-auto "analyze architecture" 2>/dev/null
 ```
 
@@ -185,12 +185,12 @@ codex exec -c model="gpt-5" -c model_reasoning_effort="high" "task"
 Define in `config.toml`:
 ```toml
 [profiles.research]
-model = "gpt-5"
+model = "gpt-5.1"
 model_reasoning_effort = "high"
 sandbox = "read-only"
 
 [profiles.development]
-model = "gpt-5-codex"
+model = "gpt-5.1-codex"
 sandbox = "workspace-write"
 ```
 
@@ -486,13 +486,13 @@ If errors persist after troubleshooting:
 
 | Task Type | Recommended Model | Reasoning Effort |
 |-----------|------------------|------------------|
-| Quick syntax fixes | `gpt-5` | minimal |
-| Code review | `gpt-5` | medium |
-| Refactoring | `gpt-5-codex` | medium |
-| Architecture analysis | `gpt-5` | high |
-| Security audit | `gpt-5` | high |
-| Algorithm optimization | `gpt-5-codex` | high |
-| Documentation generation | `gpt-5` | low |
+| Quick syntax fixes | `gpt-5.1` | minimal |
+| Code review | `gpt-5.1` | medium |
+| Refactoring | `gpt-5.1-codex` | medium |
+| Architecture analysis | `gpt-5.1` | high |
+| Security audit | `gpt-5.1` | high |
+| Algorithm optimization | `gpt-5.1-codex` | high |
+| Documentation generation | `gpt-5.1` | low |
 
 ## Common Workflows
 
