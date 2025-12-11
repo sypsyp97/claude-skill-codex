@@ -18,8 +18,8 @@ description: Executes OpenAI Codex CLI for code analysis, refactoring, and autom
    - If HPC detected: **Always use `--yolo` flag to bypass Landlock sandbox restrictions**
 
 2. ☐ **Ask user for execution parameters** via `AskUserQuestion` (single prompt):
-   - Model: `gpt-5`, `gpt-5-codex`,`gpt-5.1`, `gpt-5.1-codex` or default
-   - Reasoning effort: `minimal`, `low`, `medium`, `high`
+   - Model: `gpt-5.2`, `gpt-5.2-pro`, `gpt-5.1-codex-max`, `gpt-5-mini`, `gpt-5-nano` or default
+   - Reasoning effort: `none`, `low`, `medium`, `high`, `xhigh`
 
 3. ☐ **Determine sandbox mode** based on task:
    - `read-only`: Code review, analysis, documentation
@@ -41,7 +41,7 @@ description: Executes OpenAI Codex CLI for code analysis, refactoring, and autom
 
    **HPC command pattern** (with `--yolo` to bypass Landlock):
    ```bash
-   codex exec --yolo -m gpt-5 -c model_reasoning_effort="high" --skip-git-repo-check \
+   codex exec --yolo -m gpt-5.2 -c model_reasoning_effort="high" --skip-git-repo-check \
      "Analyze this code: $(cat /path/to/file.py)" 2>/dev/null
    ```
 
@@ -62,17 +62,17 @@ description: Executes OpenAI Codex CLI for code analysis, refactoring, and autom
 
 ## Command Patterns
 
-> **🔥 HPC QUICK TIP**: On HPC clusters (e.g., `/home/woody/`, `/home/hpc/`), **ALWAYS add `--yolo` flag** to avoid Landlock sandbox errors. Example: `codex exec --yolo -m gpt-5.1 ...`
+> **🔥 HPC QUICK TIP**: On HPC clusters (e.g., `/home/woody/`, `/home/hpc/`), **ALWAYS add `--yolo` flag** to avoid Landlock sandbox errors. Example: `codex exec --yolo -m gpt-5.2 ...`
 
 ### Read-Only Analysis
 ```bash
-codex exec -m gpt-5 -c model_reasoning_effort="medium" -s read-only \
+codex exec -m gpt-5.2 -c model_reasoning_effort="medium" -s read-only \
   --skip-git-repo-check --full-auto "review @file.py for security issues" 2>/dev/null
 ```
 
 ### Stdin Input (bypasses sandbox file restrictions)
 ```bash
-cat file.py | codex exec -m gpt-5.1 -c model_reasoning_effort="low" \
+cat file.py | codex exec -m gpt-5.2 -c model_reasoning_effort="low" \
   --skip-git-repo-check --full-auto - 2>/dev/null
 ```
 **Note**: Stdin with `-` flag may not be supported in all Codex CLI versions.
@@ -89,12 +89,12 @@ codex exec --yolo -m gpt-5 -c model_reasoning_effort="high" --skip-git-repo-chec
 **Alternative: Manual Code Injection** (if --yolo is unavailable):
 ```bash
 # Capture code content and pass directly in prompt
-codex exec -m gpt-5.1 -c model_reasoning_effort="high" --skip-git-repo-check --full-auto \
+codex exec -m gpt-5.2 -c model_reasoning_effort="high" --skip-git-repo-check --full-auto \
   "Analyze this Python code: $(cat file.py)" 2>/dev/null
 ```
 Or for large files, use heredoc:
 ```bash
-codex exec --yolo -m gpt-5.1 -c model_reasoning_effort="high" --skip-git-repo-check "$(cat <<'ENDCODE'
+codex exec --yolo -m gpt-5.2 -c model_reasoning_effort="high" --skip-git-repo-check "$(cat <<'ENDCODE'
 Analyze the following code comprehensively:
 
 $(cat file.py)
@@ -108,7 +108,7 @@ ENDCODE
 
 ### Code Modification
 ```bash
-codex exec -m gpt-5.1 -c model_reasoning_effort="high" -s workspace-write \
+codex exec -m gpt-5.1-codex-max -c model_reasoning_effort="high" -s workspace-write \
   --skip-git-repo-check --full-auto "refactor @module.py to async/await" 2>/dev/null
 ```
 
@@ -119,7 +119,7 @@ echo "fix the remaining issues" | codex exec --skip-git-repo-check resume --last
 
 ### Cross-Directory Execution
 ```bash
-codex exec -C /path/to/project -m gpt-5.1 -c model_reasoning_effort="medium" \
+codex exec -C /path/to/project -m gpt-5.2 -c model_reasoning_effort="medium" \
   -s read-only --skip-git-repo-check --full-auto "analyze architecture" 2>/dev/null
 ```
 
@@ -135,7 +135,7 @@ codex exec --profile production -c model_reasoning_effort="high" \
 
 | Flag | Values | When to Use |
 |------|--------|-------------|
-| `-m, --model` | `gpt-5`, `gpt-5-codex` | Override default model |
+| `-m, --model` | `gpt-5.2`, `gpt-5.2-pro`, `gpt-5.1-codex-max`, `gpt-5-mini`, `gpt-5-nano` | Override default model |
 | `-c, --config` | `key=value` | Runtime config override (repeatable) |
 | `-s, --sandbox` | `read-only`, `workspace-write`, `danger-full-access` | Set execution permissions |
 | `--yolo` | flag | **REQUIRED on HPC** - Bypasses all sandbox restrictions (alias for `--dangerously-bypass-approvals-and-sandbox`). **Cannot be used with --full-auto** |
@@ -151,10 +151,11 @@ codex exec --profile production -c model_reasoning_effort="high" \
 ### Configuration Options
 
 **Model Reasoning Effort** (`-c model_reasoning_effort="<LEVEL>"`):
-- `minimal`: Quick tasks, simple queries
+- `none`: Minimal reasoning for low-latency interactions
 - `low`: Standard operations, routine refactoring
 - `medium`: Complex analysis, architectural decisions (default)
 - `high`: Critical code, security audits, complex algorithms
+- `xhigh`: Extremely complex problems requiring maximum reasoning depth
 
 **Model Verbosity** (`-c model_verbosity="<LEVEL>"`):
 - `low`: Minimal output
@@ -175,22 +176,22 @@ codex exec --profile production -c model_reasoning_effort="high" \
 ### Runtime Overrides
 ```bash
 # Override single setting
-codex exec -c model="gpt-5" "task"
+codex exec -c model="gpt-5.2" "task"
 
 # Override multiple settings
-codex exec -c model="gpt-5" -c model_reasoning_effort="high" "task"
+codex exec -c model="gpt-5.2" -c model_reasoning_effort="high" "task"
 ```
 
 ### Using Profiles
 Define in `config.toml`:
 ```toml
 [profiles.research]
-model = "gpt-5.1"
+model = "gpt-5.2"
 model_reasoning_effort = "high"
 sandbox = "read-only"
 
 [profiles.development]
-model = "gpt-5.1-codex"
+model = "gpt-5.1-codex-max"
 sandbox = "workspace-write"
 ```
 
@@ -264,20 +265,20 @@ When output contains warnings:
 
 1. **Stdin piping** (recommended):
    ```bash
-   cat target.py | codex exec -m gpt-5 -c model_reasoning_effort="medium" \
+   cat target.py | codex exec -m gpt-5.2 -c model_reasoning_effort="medium" \
      --skip-git-repo-check --full-auto - 2>/dev/null
    ```
 
 2. **Explicit permissions**:
    ```bash
-   codex exec -m gpt-5 -s read-only \
+   codex exec -m gpt-5.2 -s read-only \
      -c 'sandbox_permissions=["disk-full-read-access"]' \
      --skip-git-repo-check --full-auto "@file.py" 2>/dev/null
    ```
 
 3. **Upgrade sandbox**:
    ```bash
-   codex exec -m gpt-5 -s workspace-write \
+   codex exec -m gpt-5.2 -s workspace-write \
      --skip-git-repo-check --full-auto "review @file.py" 2>/dev/null
    ```
 
@@ -289,7 +290,7 @@ When output contains warnings:
 
 **Solution**: Use `-C <DIR>` to change directory:
 ```bash
-codex exec -C /target/dir -m gpt-5 --skip-git-repo-check \
+codex exec -C /target/dir -m gpt-5.2 --skip-git-repo-check \
   --full-auto "task" 2>/dev/null
 ```
 
@@ -301,8 +302,8 @@ codex exec -C /target/dir -m gpt-5 --skip-git-repo-check \
 1. Remove `2>/dev/null` to see full stderr
 2. Verify installation: `codex --version`
 3. Check configuration: `cat ~/.codex/config.toml`
-4. Test minimal command: `codex exec -m gpt-5 "hello world"`
-5. Verify model access: `codex exec --model gpt-5 "test"`
+4. Test minimal command: `codex exec -m gpt-5.2 "hello world"`
+5. Verify model access: `codex exec --model gpt-5.2 "test"`
 
 ### Model Unavailable
 
@@ -311,7 +312,7 @@ codex exec -C /target/dir -m gpt-5 --skip-git-repo-check \
 **Solutions**:
 1. Check configured model: `grep model ~/.codex/config.toml`
 2. Verify API access: Ensure valid credentials
-3. Try alternative model: `-m gpt-5-codex`
+3. Try alternative model: `-m gpt-5.2-pro` or `-m gpt-5-mini`
 4. Use OSS fallback: `--oss` (requires Ollama)
 
 ### Session Resume Fails
@@ -335,7 +336,7 @@ codex exec -C /target/dir -m gpt-5 --skip-git-repo-check \
 1. **YOLO Flag** (PRIMARY SOLUTION - WORKS ON HPC):
    ```bash
    # Bypasses Landlock restrictions completely
-   codex exec --yolo -m gpt-5 -c model_reasoning_effort="high" --skip-git-repo-check \
+   codex exec --yolo -m gpt-5.2 -c model_reasoning_effort="high" --skip-git-repo-check \
      "Analyze this code: $(cat /full/path/to/file.py)" 2>/dev/null
    ```
 
@@ -344,13 +345,13 @@ codex exec -C /target/dir -m gpt-5 --skip-git-repo-check \
 2. **Manual Code Injection** (fallback if --yolo unavailable):
    ```bash
    # Pass code directly in prompt via command substitution
-   codex exec -m gpt-5 -c model_reasoning_effort="high" --skip-git-repo-check --full-auto \
+   codex exec -m gpt-5.2 -c model_reasoning_effort="high" --skip-git-repo-check --full-auto \
      "Analyze this code comprehensively: $(cat /full/path/to/file.py)" 2>/dev/null
    ```
 
 3. **Heredoc for Long Code**:
    ```bash
-   codex exec --yolo -m gpt-5 -c model_reasoning_effort="high" --skip-git-repo-check "$(cat <<'EOF'
+   codex exec --yolo -m gpt-5.2 -c model_reasoning_effort="high" --skip-git-repo-check "$(cat <<'EOF'
    Analyze the following Python code for architecture, bugs, and optimization opportunities:
 
    $(cat /home/user/script.py)
@@ -364,7 +365,7 @@ codex exec -C /target/dir -m gpt-5 --skip-git-repo-check \
    ```bash
    # SSH to login node first, then run codex there (not in Slurm job)
    ssh login.cluster.edu
-   codex exec --yolo -m gpt-5 --skip-git-repo-check "analyze @file.py" 2>/dev/null
+   codex exec --yolo -m gpt-5.2 --skip-git-repo-check "analyze @file.py" 2>/dev/null
    ```
 
 5. **Use Apptainer/Singularity** (if cluster supports):
@@ -382,10 +383,11 @@ codex exec -C /target/dir -m gpt-5 --skip-git-repo-check \
 ## Best Practices
 
 ### Reasoning Effort Selection
-- **minimal**: Syntax fixes, simple renaming
+- **none**: Minimal reasoning for low-latency interactions, quick syntax fixes
 - **low**: Standard refactoring, basic analysis
 - **medium**: Complex refactoring, architecture review
 - **high**: Security audits, algorithm optimization, critical bugs
+- **xhigh**: Extremely complex problems requiring maximum reasoning depth
 
 ### Sandbox Mode Selection
 - **read-only**: Default for any analysis or review
@@ -434,7 +436,7 @@ Create profiles for common workflows:
 
 ### CI/CD Integration
 ```bash
-codex exec --json -o result.txt -m gpt-5 \
+codex exec --json -o result.txt -m gpt-5.2 \
   -c model_reasoning_effort="medium" \
   --skip-git-repo-check --full-auto \
   "run security audit on changed files" 2>/dev/null
@@ -443,7 +445,7 @@ codex exec --json -o result.txt -m gpt-5 \
 ### Batch Processing
 ```bash
 for file in *.py; do
-  cat "$file" | codex exec -m gpt-5 -c model_reasoning_effort="low" \
+  cat "$file" | codex exec -m gpt-5.2 -c model_reasoning_effort="low" \
     --skip-git-repo-check --full-auto "lint and format" - 2>/dev/null
 done
 ```
@@ -451,7 +453,7 @@ done
 ### Multi-Step Workflows
 ```bash
 # Step 1: Analysis
-codex exec -m gpt-5 -c model_reasoning_effort="high" -s read-only \
+codex exec -m gpt-5.2 -c model_reasoning_effort="high" -s read-only \
   --full-auto "analyze @codebase for architectural issues" 2>/dev/null
 
 # Step 2: Resume with changes
@@ -486,13 +488,16 @@ If errors persist after troubleshooting:
 
 | Task Type | Recommended Model | Reasoning Effort |
 |-----------|------------------|------------------|
-| Quick syntax fixes | `gpt-5.1` | minimal |
-| Code review | `gpt-5.1` | medium |
-| Refactoring | `gpt-5.1-codex` | medium |
-| Architecture analysis | `gpt-5.1` | high |
-| Security audit | `gpt-5.1` | high |
-| Algorithm optimization | `gpt-5.1-codex` | high |
-| Documentation generation | `gpt-5.1` | low |
+| Quick syntax fixes | `gpt-5-mini` | none |
+| Simple refactoring | `gpt-5-mini` | low |
+| Code review | `gpt-5.2` | medium |
+| Complex refactoring | `gpt-5.1-codex-max` | medium |
+| Architecture analysis | `gpt-5.2` | high |
+| Security audit | `gpt-5.2` | high |
+| Algorithm optimization | `gpt-5.1-codex-max` | high |
+| Documentation generation | `gpt-5-mini` | low |
+| Tough algorithmic problems | `gpt-5.2-pro` | xhigh |
+| High-throughput tasks | `gpt-5-nano` | none |
 
 ## Common Workflows
 
